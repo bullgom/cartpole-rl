@@ -35,9 +35,9 @@ if __name__ == "__main__":
     total_steps = 100000
     e_greedy_parameters = EpsilonGreedyParameters(0.07)
     discount = 0.99
-    lr = 0.0005
+    lr = 0.001
     buffer_size = 1000
-    replay_per_step = 64
+    replay_per_step = 32
     image_size = 84
 
     display_game = True

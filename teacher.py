@@ -1,6 +1,7 @@
 from agent import MyLovelyAgent
 import torch
 import torch.nn.functional as F
+from experience import ExperienceBuffer
 
 class MrAdamsTheTeacher:
     """Implements algorithms for the learning part"""
@@ -10,39 +11,48 @@ class MrAdamsTheTeacher:
         agent: MyLovelyAgent, 
         discount: float, 
         optimizer: torch.optim.Optimizer, 
-        device: torch.device
+        device: torch.device,
+        buffer: ExperienceBuffer,
+        batch_size: int
     ):
         self.agent = agent
         self.discount = discount
         self.optimizer = optimizer
         self.device = device
-
-    def target_value(self, reward: float, new_state: torch.Tensor) -> torch.Tensor:
-        """
-        Using the bellman eq. the true value is estimated as R + v(S_(t+1))
-        TODO: Find the proof for why this works? I only know the equation
-        """
-
-        return reward + self.discount * self.agent(new_state)
-
-    def estimate_value(self, last_state: torch.Tensor) -> torch.Tensor:
-        """
-        Value Estimate of the current state
-        TODO: Reuse the results of `make_up_my_mind`, OR use replay buffer
-        """
-        return self.agent(last_state)
-
-    def loss(self, reward: float, new_state: torch.Tensor, last_state: torch.Tensor) -> torch.Tensor:
-        """Compute loss"""
-        target = self.target_value(reward, new_state)
-        prediction = self.estimate_value(last_state)
-        return F.mse_loss(prediction, target)
-
-    def teach_a_problem(self, reward: float, new_state: torch.Tensor, last_state: torch.Tensor):
-        """Backpropagate for given state"""
+        self.buffer = buffer
+        self.bs = batch_size
+    
+    def loss(
+        self, 
+        state: torch.Tensor, 
+        next_state: torch.Tensor,
+        action: torch.Tensor, 
+        reward: torch.Tensor, 
+        done: torch.Tensor
+    ):
+        # tensor.max returns multiple informations. Take max values by .values
+        q_scalar = self.agent(next_state).max(dim=1).values
+        
+        target = reward + done.logical_not() * (self.discount * q_scalar)
+        values = self.agent(state)
+        pred_q = values.gather(dim=1, index=action.view(1,-1)).squeeze(0)
+        
+        return F.mse_loss(pred_q, target)
+    
+    def teach_multiple(self):
+        
+        if not self.buffer.full():
+            return
         self.optimizer.zero_grad()
+
+        last, new, r, a, done = self.buffer.sample(self.bs)
+
+        state = last.to(self.device)
+        next_state = new.to(self.device)
+        action = a.to(self.device)
+        reward = r.to(self.device)
+        done = done.int().to(self.device)
         
-        self.loss(reward, new_state.to(self.device), last_state.to(self.device)).backward()
-        
+        self.loss(state, next_state, action, reward, done).backward()
         self.optimizer.step()
         

@@ -4,8 +4,8 @@ import torch.nn.functional as F
 import numpy as np
 import typing
 from dataclasses import dataclass
+from torchvision.transforms import transforms
 
-ScreenShape = tuple[int, int, int]
 Action = typing.Any
 
 
@@ -39,28 +39,31 @@ class MyLovelyAgent(torch.nn.Module):
 
     def __init__(
         self,
-        input_shape: ScreenShape,
+        image_size: int,
         action_set: set[Action],
         e_greedy_parameters: EpsilonGreedyParameters,
         device: torch.device
     ) -> None:
-        assert issubclass(type(input_shape), tuple)
 
         super().__init__()
-        self.input_shape = input_shape
+        self.input_shape = image_size
         self.action_set = action_set
         self.e_greedy_parameters = e_greedy_parameters
         self.device = device
 
-        self.init_layers(input_shape, action_set)
+        self.init_layers(action_set)
         self.to(device)
+        self.transforms = transforms.Compose([
+            transforms.Grayscale(),
+            transforms.CenterCrop(image_size)
+        ])
 
-    def init_layers(self, input_shape: ScreenShape, action_set: set[Action]):
+    def init_layers(self, action_set: set[Action]):
         """Define layers here"""
-        input_width, input_height, input_channels = input_shape
-
+        input_width , input_height = self.input_shape, self.input_shape
+        
         out_channels = 32
-        self.conv1 = NN.Conv2d(input_channels, out_channels, kernel_size=3)
+        self.conv1 = NN.Conv2d(1, out_channels, kernel_size=3)
         shape_now = (input_width-2, input_height-2, out_channels)
 
         self.pool1 = NN.MaxPool2d(kernel_size=2, stride=2)
