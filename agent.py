@@ -60,23 +60,23 @@ class MyLovelyAgent(torch.nn.Module):
 
     def init_layers(self, action_set: set[Action]):
         """Define layers here"""
-        input_width , input_height = self.input_shape, self.input_shape
-        
-        out_channels = 32
+        input_width, input_height = self.input_shape, self.input_shape
+
+        out_channels = 16
         self.conv1 = NN.Conv2d(1, out_channels, kernel_size=3)
         shape_now = (input_width-2, input_height-2, out_channels)
 
         self.pool1 = NN.MaxPool2d(kernel_size=2, stride=2)
         shape_now = (int(shape_now[0]/2), int(shape_now[1]/2), out_channels)
 
-        out_channels = 64
+        out_channels = 32
         self.conv2 = NN.Conv2d(shape_now[2], out_channels, kernel_size=3)
         shape_now = (shape_now[0]-2, shape_now[1]-2, out_channels)
 
         self.pool2 = NN.MaxPool2d(kernel_size=2, stride=2)
         shape_now = (int(shape_now[0]/2), int(shape_now[1]/2), out_channels)
 
-        out_channels = 64
+        out_channels = 32
         self.conv3 = NN.Conv2d(shape_now[2], out_channels, kernel_size=3)
         shape_now = (shape_now[0]-2, shape_now[1]-2, out_channels)
 
@@ -126,3 +126,10 @@ class MyLovelyAgent(torch.nn.Module):
         self.train()
 
         return action_index
+
+    def copy(self) -> "MyLovelyAgent":
+        new_agent = MyLovelyAgent(self.input_shape, self.action_set,
+                                  self.e_greedy_parameters, self.device)
+        new_agent.load_state_dict(self.state_dict())
+        
+        return new_agent

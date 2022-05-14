@@ -16,16 +16,22 @@ class Experience:
     
 class ExperienceBuffer(list):
     
-    def __init__(self, max_length: int):
+    def __init__(
+        self, 
+        max_length: int,
+        random_discard: bool = False
+    ):
         assert type(max_length) is int
         self.max_length = max_length
+        self.random_discard = random_discard
     
     def append(self, __object: Experience) -> None:
         if not issubclass(type(__object), Experience):
             raise TypeError(f"Expected instance of an Experience, got {type(__object)} instead")
         
         if len(self) >= self.max_length:
-            self.pop(0)
+            i = int(np.random.uniform(0, 100)) if self.random_discard else 0
+            self.pop(i)
         return super().append(__object)
     
     def full(self) -> bool:

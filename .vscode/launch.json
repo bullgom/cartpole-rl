@@ -11,5 +11,13 @@
             "module": "trying",
             "justMyCode": true
         }
+        ,
+        {
+            "name": "Train Off Policy",
+            "type": "python",
+            "request": "launch",
+            "module": "train_off_policy",
+            "justMyCode": true
+        }
     ]
 }
