@@ -3,8 +3,7 @@ OpenAI/gym/CartPole-v1 게임을 RL/DQN을 사용해서 학습하는 레포지�
 ### 환경 구성
 `conda env update -n my_env --file environment.yaml`
 
- - 실행 환경
- - 
+### 실행 환경
 Windows 11, Python 3.9.12
 
  - 실행 파일
