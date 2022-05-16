@@ -24,4 +24,4 @@ experience replay buffer 정의
 ## 문제
 ### train_off_policy.py
 간헐적으로 agent가 잘 합니다. 그런데 점수의 이동 평균(100)은 학습이 진행될수록 내려갑니다.
-!Rewards Per Episode(https://github.com/bullgom/cartpole-rl/blob/main/rewards_per_episode.jpg?raw=true)
+![Rewards Per Episode](https://github.com/bullgom/cartpole-rl/blob/main/rewards_per_episode.jpg?raw=true)
