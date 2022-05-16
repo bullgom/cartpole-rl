@@ -1,6 +1,6 @@
 OpenAI/gym/CartPole-v1 게임을 RL/DQN을 사용해서 학습하는 레포지토리 입니다.
 
- - 환경 구성
+ # 환경 구성
  - 
 `conda env update -n my_env --file environment.yaml`
 
