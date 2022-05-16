@@ -8,7 +8,7 @@
             "name": "Try",
             "type": "python",
             "request": "launch",
-            "module": "trying",
+            "module": "train_on_policy",
             "justMyCode": true
         }
         ,

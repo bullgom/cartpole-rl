@@ -23,5 +23,8 @@ OpenAI/gym/CartPole-v1 게임을 RL/DQN을 사용해서 학습하는 레포지�
     - trying_ma100_26.py을 실행했을 때 어쩔 때에는 아예 학습을 하지 못 합니다.
     - train_off_policy.py을 실행했을 때 최대 ma100가 14까지 나오다가 다시 12까지 내려가는 등...
 
+Update
+Off-Policy에서 입력 이미지를 Square가 아니라 가로가 더 긴 사각형을 주었더니 더 빠르고 잘 했다.
+
 #GG
     

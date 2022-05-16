@@ -27,12 +27,13 @@ def make_state_image(env: gym.Env, inc_dim=True) -> torch.Tensor:
 if __name__ == "__main__":
 
     total_steps = 10000
-    e_greedy_parameters = EpsilonGreedyParameters(0.07)
+    e_greedy_parameters = EpsilonGreedyParameters(0.01)
     discount = 0.99
-    lr = 0.001
+    lr = 0.01
     buffer_size = 1000
-    replay_per_step = 32
+    replay_per_step = 128
     image_size = 84
+    episodes_per_copy = 10
 
     display_game = True
 

@@ -3,7 +3,6 @@ import torch.nn as NN
 import torch.nn.functional as F
 import numpy as np
 import typing
-from dataclasses import dataclass
 from torchvision.transforms import transforms
 from PIL import Image
 
@@ -56,7 +55,7 @@ class MyLovelyAgent(torch.nn.Module):
         self.to(device)
         self.transforms = transforms.Compose([
             transforms.Grayscale(),
-            transforms.Resize(image_size)
+            transforms.CenterCrop(image_size)
         ])
 
     def init_layers(self, action_set: set[Action]):
@@ -66,21 +65,31 @@ class MyLovelyAgent(torch.nn.Module):
         else:
             input_width, input_height = self.input_shape
 
-        self.conv1 = NN.Conv2d(1, 16, kernel_size=5, stride=2)
-        self.bn1 = NN.BatchNorm2d(16)
-        self.conv2 = NN.Conv2d(16, 32, kernel_size=5, stride=2)
-        self.bn2 = NN.BatchNorm2d(32)
-        self.conv3 = NN.Conv2d(32, 32, kernel_size=5, stride=2)
-        self.bn3 = NN.BatchNorm2d(32)
+        out_channels = 16
+        self.conv1 = NN.Conv2d(1, out_channels, kernel_size=3)
+        shape_now = (input_width-2, input_height-2, out_channels)
 
-        # Number of Linear input connections depends on output of conv2d layers
-        # and therefore the input image size, so compute it.
-        def conv2d_size_out(size, kernel_size = 5, stride = 2):
-            return (size - (kernel_size - 1) - 1) // stride  + 1
-        convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(input_width)))
-        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(input_height)))
-        linear_input_size = convw * convh * 32
-        self.head = NN.Linear(linear_input_size, len(action_set))
+        self.pool1 = NN.MaxPool2d(kernel_size=2, stride=2)
+        shape_now = (int(shape_now[0]/2), int(shape_now[1]/2), out_channels)
+
+        out_channels = 32
+        self.conv2 = NN.Conv2d(shape_now[2], out_channels, kernel_size=3)
+        shape_now = (shape_now[0]-2, shape_now[1]-2, out_channels)
+
+        self.pool2 = NN.MaxPool2d(kernel_size=2, stride=2)
+        shape_now = (int(shape_now[0]/2), int(shape_now[1]/2), out_channels)
+
+        out_channels = 32
+        self.conv3 = NN.Conv2d(shape_now[2], out_channels, kernel_size=3)
+        shape_now = (shape_now[0]-2, shape_now[1]-2, out_channels)
+
+        self.pool3 = NN.MaxPool2d(kernel_size=2, stride=2)
+        shape_now = (int(shape_now[0]/2), int(shape_now[1]/2), out_channels)
+
+        mul = shape_now[0] * shape_now[1] * shape_now[2]
+
+        self.flatten = NN.Flatten()
+        self.fc = NN.Linear(mul, len(action_set))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -90,10 +99,16 @@ class MyLovelyAgent(torch.nn.Module):
         assert issubclass(type(x), torch.Tensor)
         x = x.to(self.device)
 
-        x = F.relu(self.bn1(self.conv1(x)))
-        x = F.relu(self.bn2(self.conv2(x)))
-        x = F.relu(self.bn3(self.conv3(x)))
-        return self.head(x.view(x.size(0), -1))
+        x = F.relu(self.conv1(x))
+        x = self.pool1(x)
+        x = F.relu(self.conv2(x))
+        x = self.pool2(x)
+        x = F.relu(self.conv3(x))
+        x = self.pool3(x)
+
+        y = F.relu(self.fc(x.view(x.size(0), -1)))
+
+        return y
 
     def make_up_my_mind(self, image: torch.Tensor) -> Action:
         """

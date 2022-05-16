@@ -17,6 +17,7 @@ class MrAdamsTheTeacher:
         batch_size: int
     ):
         self.target = target_agent
+        self.target.eval()
         self.policy = policy_agent
         self.discount = discount
         self.optimizer = optimizer
@@ -34,14 +35,17 @@ class MrAdamsTheTeacher:
     ):
         # tensor.max returns multiple informations. Take max values by .values
         q_scalar = self.target(next_state).max(dim=1).values
-        target = reward + done.logical_not() * (self.discount * q_scalar)
+        not_done = done.logical_not()
+        bootstrap = not_done * (self.discount * q_scalar)
+        target = (reward + bootstrap).unsqueeze(0)
         
         values = self.policy(state)
-        pred_q = values.gather(dim=1, index=action.view(1,-1)).squeeze(0)
+        action_batch = action.view(1, -1)
+        pred_q = values.gather(dim=1, index=action_batch)
         
-        return F.mse_loss(pred_q, target)
+        return F.huber_loss(pred_q, target)
     
-    def teach_multiple(self):
+    def teach_multiple(self) -> torch.Tensor:
         
         if len(self.buffer) < self.bs:
             return
@@ -56,6 +60,9 @@ class MrAdamsTheTeacher:
         reward = r.to(self.device)
         done = done.int().to(self.device)
         
-        self.loss(state, next_state, action, reward, done).backward()
+        loss_tensor = self.loss(state, next_state, action, reward, done)
+        loss_tensor.backward()
         self.optimizer.step()
+        
+        return loss_tensor
 

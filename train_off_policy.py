@@ -27,12 +27,12 @@ def make_state_image(env: gym.Env, inc_dim=True) -> torch.Tensor:
 if __name__ == "__main__":
 
     total_steps = 10000
-    e_greedy_parameters = EpsilonGreedyParameters(0.01)
-    discount = 0.99
+    e_greedy_parameters = EpsilonGreedyParameters(0.9, 0.01, 100)
+    discount = 0.111
     lr = 0.01
     buffer_size = 1000
     replay_per_step = 128
-    image_size = 84
+    image_size = (40, 40)
     episodes_per_copy = 10
 
     display_game = True
@@ -58,6 +58,7 @@ if __name__ == "__main__":
     episodes = 0
     episode_reward_ma = []
     total_reward = []
+    episode_loss = []
     max_ma_reward = 0
     ma_length = 100
 
@@ -83,8 +84,9 @@ if __name__ == "__main__":
             proc_image, new_proc_image, reward, action, done))
         image = new_image
 
-        teacher.teach_multiple()
-        
+        loss = teacher.teach_multiple()
+        if loss:
+            episode_loss.append(loss.item())
 
         if done:
             total_reward.append(accumulated_reward)
@@ -100,11 +102,14 @@ if __name__ == "__main__":
                 teacher.target.load_state_dict(policy_agent.state_dict())
                 
             episodes += 1
+            avg_loss = sum(episode_loss)/len(episode_loss) if episode_loss else 0
             print(
-                f"{episodes} - {t+1} - Steps Took: {inner_step} | AccumR: {accumulated_reward} | MA{ma_length}: {ma:.2f}")
+                f"{episodes} - {t+1} - Steps Took: {inner_step} | AccumR: {accumulated_reward} | MA{ma_length}: {ma:.2f} | Loss: {avg_loss}")
             env.reset()
             accumulated_reward = 0.
             inner_step = 0
+            e_greedy_parameters.step()
+            episode_loss.clear()
 
     env.close()
     loop_end = datetime.now()

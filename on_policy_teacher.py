@@ -41,8 +41,9 @@ class MrAdamsTheTeacher:
     
     def teach_multiple(self):
         
-        if not self.buffer.full():
+        if len(self.buffer) < self.bs:
             return
+        
         self.optimizer.zero_grad()
 
         last, new, r, a, done = self.buffer.sample(self.bs)
