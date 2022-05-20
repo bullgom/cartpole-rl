@@ -1,70 +1,113 @@
+import matplotlib.pyplot as plt
 import gym
 from agent import MyLovelyAgent, EpsilonGreedyParameters
 from off_policy_teacher import MrAdamsTheTeacher
 import torch
 import torchvision.transforms.functional as vision_f
+from torchvision.transforms import transforms as tr
 from datetime import datetime
 from experience import ExperienceBuffer, Experience
+import numpy as np
+from typing import Union
+from PIL import Image
+
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
-def torch_scalar_to_int(tensor: torch.Tensor) -> int:
-    if not issubclass(type(tensor), torch.Tensor):
-        raise TypeError(f"{type(tensor)} is not a Tensor")
+def plot(rewards, mean_values):
+    plt.clf()
+    plt.title("Training!!!!")
+    plt.xlabel("Episodes")
+    plt.ylabel("Reward")
+    plt.plot(rewards)
+    plt.plot(mean_values)
+    plt.pause(0.001)
 
-    return tensor.item()
 
 
-def make_state_image(env: gym.Env, inc_dim=True) -> torch.Tensor:
+def make_state_image(env: gym.Env, transforms) -> torch.Tensor:
+    # Returned screen requested by gym is 400x600x3, but is sometimes larger
+    # such as 800x1200x3. Transpose it into torch order (CHW).
+    screen = env.render(mode='rgb_array').transpose((2, 0, 1))
+    # Cart is in the lower half, so strip off the top and bottom of the screen
+    _, screen_height, screen_width = screen.shape
+    screen = screen[:, int(screen_height*0.4):int(screen_height * 0.8)]
+    view_width = int(screen_width * 0.6)
+    cart_location = get_cart_location(screen_width)
+    if cart_location < view_width // 2:
+        slice_range = slice(view_width)
+    elif cart_location > (screen_width - view_width // 2):
+        slice_range = slice(-view_width, None)
+    else:
+        slice_range = slice(cart_location - view_width // 2,
+                            cart_location + view_width // 2)
+    # Strip off the edges, so that we have a square image centered on a cart
+    screen = screen[:, :, slice_range]
+    # Convert to float, rescale, convert to torch tensor
+    # (this doesn't require a copy)
+    screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
+    screen = torch.from_numpy(screen)
+    # Resize, and add a batch dimension (BCHW)
+    return transforms(screen)
 
-    image = env.render("rgb_array")
 
-    image_tensor = vision_f.to_tensor(image)
-    if inc_dim:
-        image_tensor = image_tensor.unsqueeze(0)
-    return image_tensor
+def get_cart_location(screen_width):
+    world_width = env.x_threshold * 2
+    scale = screen_width / world_width
+    return int(env.state[0] * scale + screen_width / 2.0)  # MIDDLE OF CART
 
 
 if __name__ == "__main__":
-
     total_steps = 10000
-    e_greedy_parameters = EpsilonGreedyParameters(0.9, 0.01, 100)
-    discount = 0.111
-    lr = 0.01
-    buffer_size = 1000
+    e_greedy_parameters = EpsilonGreedyParameters(.9, 0.05, 200)
+    discount = 0.999
+    #lr = 0.01
+    buffer_size = 10000
     replay_per_step = 128
-    image_size = (40, 40)
+    image_size = (40, 90)
+    window_size = (600, 400)
     episodes_per_copy = 10
 
-    display_game = True
+    display_game = False
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    transforms = tr.Compose([
+        tr.ToPILImage(),
+        tr.Grayscale(),
+        tr.Resize(40, Image.CUBIC),
+        tr.ToTensor()
+    ])
 
     env = gym.make('CartPole-v1')
 
     action_set = set([x for x in range(env.action_space.n)])
 
     policy_agent = MyLovelyAgent(image_size, action_set,
-                          e_greedy_parameters, device)
+                                 e_greedy_parameters, device)
     target_agent = policy_agent.copy()
     target_agent.eval()
-    
-    optimizer = torch.optim.Adam(policy_agent.parameters(), lr=lr)
+
+    optimizer = torch.optim.RMSprop(policy_agent.parameters())
     buffer = ExperienceBuffer(buffer_size)
-    teacher = MrAdamsTheTeacher(target_agent, policy_agent, discount, 
+    teacher = MrAdamsTheTeacher(target_agent, policy_agent, discount,
                                 optimizer, device, buffer, replay_per_step)
 
     accumulated_reward = 0
     inner_step = 0
     episodes = 0
     episode_reward_ma = []
+    ma_records = []
     total_reward = []
     episode_loss = []
     max_ma_reward = 0
     ma_length = 100
 
+    plt.show()
+    plot(total_reward, ma_records)
     env.reset()
-    image = make_state_image(env, False)
-    proc_image = policy_agent.transforms(image)
+    proc_image = make_state_image(env, transforms)
     loop_start = datetime.now()
     for t in range(total_steps):
         inner_step += 1
@@ -72,17 +115,15 @@ if __name__ == "__main__":
         if display_game:
             env.render("human")
 
-        tensor_action = policy_agent.make_up_my_mind(proc_image.unsqueeze(0))
-        action = torch_scalar_to_int(tensor_action)
+        action = policy_agent.make_up_my_mind(proc_image.unsqueeze(0))
 
         _, reward, done, info = env.step(action)
         accumulated_reward += reward
-        new_image = make_state_image(env, False)
-        new_proc_image = policy_agent.transforms(new_image)
+        new_proc_image = make_state_image(env, transforms)
 
         buffer.append(Experience(
             proc_image, new_proc_image, reward, action, done))
-        image = new_image
+        proc_image = new_proc_image
 
         loss = teacher.teach_multiple()
         if loss:
@@ -94,17 +135,20 @@ if __name__ == "__main__":
             if len(episode_reward_ma) > ma_length:
                 episode_reward_ma.pop(0)
             ma = sum(episode_reward_ma)/len(episode_reward_ma)
+            ma_records.append(ma)
             if ma > max_ma_reward:
                 max_ma_reward = ma
 
             if episodes % episodes_per_copy == 0:
                 print("Copying value function")
                 teacher.target.load_state_dict(policy_agent.state_dict())
-                
+
             episodes += 1
-            avg_loss = sum(episode_loss)/len(episode_loss) if episode_loss else 0
+            avg_loss = sum(episode_loss) / \
+                len(episode_loss) if episode_loss else 0
             print(
                 f"{episodes} - {t+1} - Steps Took: {inner_step} | AccumR: {accumulated_reward} | MA{ma_length}: {ma:.2f} | Loss: {avg_loss}")
+            plot(total_reward, ma_records)
             env.reset()
             accumulated_reward = 0.
             inner_step = 0
@@ -118,8 +162,7 @@ if __name__ == "__main__":
     print(
         f"Elapsed Time: {elapsed_time} | Max Reward MA{ma_length}: {max_ma_reward}")
 
-    import os
-    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-    import matplotlib.pyplot as plt
-    plt.plot(total_reward)
+    plt.plot(total_reward, label="Reward Per Episode")
+    plt.plot(ma_records, label="MA 100")
+    plt.legend()
     plt.show()

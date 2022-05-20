@@ -34,23 +34,22 @@ class MrAdamsTheTeacher:
         done: torch.Tensor
     ):
         # tensor.max returns multiple informations. Take max values by .values
-        q_scalar = self.target(next_state).max(dim=1).values
+        q_scalar = self.target(next_state).max(dim=1)[0].detach()
         not_done = done.logical_not()
         bootstrap = not_done * (self.discount * q_scalar)
-        target = (reward + bootstrap).unsqueeze(0)
+        target = (reward + bootstrap).unsqueeze(1)
         
         values = self.policy(state)
         action_batch = action.view(1, -1)
         pred_q = values.gather(dim=1, index=action_batch)
         
-        return F.huber_loss(pred_q, target)
+        return F.smooth_l1_loss(pred_q, target)
     
     def teach_multiple(self) -> torch.Tensor:
         
         if len(self.buffer) < self.bs:
             return
         
-        self.optimizer.zero_grad()
 
         last, new, r, a, done = self.buffer.sample(self.bs)
 
@@ -61,7 +60,11 @@ class MrAdamsTheTeacher:
         done = done.int().to(self.device)
         
         loss_tensor = self.loss(state, next_state, action, reward, done)
+        
+        self.optimizer.zero_grad()
         loss_tensor.backward()
+        for param in self.policy.parameters():
+            param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
         
         return loss_tensor
