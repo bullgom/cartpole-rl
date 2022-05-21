@@ -61,16 +61,16 @@ def get_cart_location(screen_width):
 if __name__ == "__main__":
     total_steps = 20000
     e_greedy_parameters = EpsilonGreedyParameters(.9, 0.01, 200)
-    discount = 0.995
+    discount = 0.999
     lr = 0.00025
     buffer_size = 10000
     replay_per_step = 128
     image_size = (40, 90)
     window_size = (600, 400)
-    episodes_per_copy = 20
+    episodes_per_copy = 30
 
     display_game = False
-
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     transforms = tr.Compose([

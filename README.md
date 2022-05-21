@@ -35,6 +35,16 @@ https://wandb.ai/safijari/dqn-tutorial/reports/Deep-Q-Networks-with-the-Cartpole
 
 학습을 굉장히 느리게 하도록 했다!
 
+Wandb의 기능을 확인하니 Hyper Paremter 공간을 알아서 탐색해주는 기능이 있는 것으로 보였다. 
+
+사실 기존 실험들의 실패 요인을 아직도 정확히 모르겠다. 하나 하나 Pytorch와 다른 코드들의 코드로 변경하다 보니 어느새 되었다. 그리고 또하나, 대부분의 실험을 400 episode 수준에서 종료 시켰다. 어쩌다가 그보다 더 실행해 보았는데 후반에서야 조금씩 학습하기 시작했다.
+
+
+해당 글에서 다음과 같은 문장이 있었다: "Hyperparameters are a particular pain point in reinforcement learning, much more so than in deep learning since it can take a long time before any signs of progress show up."
+
+코드의 문제인지, Hyper Parameter 문제인지 아니면 아직 학습이 덜 된 것인지 모르겠다. 
+
+
 2 - 어느 Medium 글의 경우
 https://medium.com/analytics-vidhya/solving-open-ais-cartpole-using-reinforcement-learning-part-2-73848cbda4f1
 
@@ -42,3 +52,10 @@ bs: 64, mem_size: 10000, target_up: 5, discount: 0.00, lr: 0.00025, discount gra
 
 아! 여기서는 이미지를 사용하지 않았다.
 200 episode만에 max점수인 200점 도달했다
+
+## To Do
+이제 되긴 되는데, 어느 부분이 문제였는지 정확히 모르겠다.
+
+일단 Hyper Parameter는 확실히 문제였다. Wandb 글에서 lr 이 크면 부정적인 영향을 미친다고 나와 있었다. 나는 0.01 수준으로 나름 큰 lr을 쓰고 있었기 때문에, 이게 문제였을 수 있다.
+
+이제 나의 코드로 다시 해 볼 차례이다.
