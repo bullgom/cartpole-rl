@@ -38,8 +38,8 @@ class ExperienceBuffer(list):
         return (len(self) == self.max_length)
 
     def sample(self, amount: int) -> tuple:
-        indices = np.random.choice(len(self), amount, replace=False)
-        lasts, currs, rs, actions, dones = zip(*[self[i] for i in indices])
+        selected = np.random.choice(self, amount, replace=False)
+        lasts, currs, rs, actions, dones = zip(*selected)
         lasts = torch.stack(lasts)
         currs = torch.stack(currs)
         rs = torch.tensor(rs)

@@ -6,7 +6,8 @@ import torch
 import torchvision.transforms.functional as vision_f
 from torchvision.transforms import transforms as tr
 from datetime import datetime
-from experience import ExperienceBuffer, Experience
+from er import ReplayMemory, Transition
+
 import numpy as np
 from typing import Union
 from PIL import Image
@@ -23,7 +24,6 @@ def plot(rewards, mean_values):
     plt.plot(rewards)
     plt.plot(mean_values)
     plt.pause(0.001)
-
 
 
 def make_state_image(env: gym.Env, transforms) -> torch.Tensor:
@@ -49,7 +49,7 @@ def make_state_image(env: gym.Env, transforms) -> torch.Tensor:
     screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
     screen = torch.from_numpy(screen)
     # Resize, and add a batch dimension (BCHW)
-    return transforms(screen)
+    return transforms(screen).unsqueeze(0)
 
 
 def get_cart_location(screen_width):
@@ -59,15 +59,15 @@ def get_cart_location(screen_width):
 
 
 if __name__ == "__main__":
-    total_steps = 10000
-    e_greedy_parameters = EpsilonGreedyParameters(.9, 0.05, 200)
-    discount = 0.999
-    #lr = 0.01
+    total_steps = 20000
+    e_greedy_parameters = EpsilonGreedyParameters(.9, 0.01, 200)
+    discount = 0.995
+    lr = 0.00025
     buffer_size = 10000
     replay_per_step = 128
     image_size = (40, 90)
     window_size = (600, 400)
-    episodes_per_copy = 10
+    episodes_per_copy = 20
 
     display_game = False
 
@@ -86,11 +86,12 @@ if __name__ == "__main__":
 
     policy_agent = MyLovelyAgent(image_size, action_set,
                                  e_greedy_parameters, device)
+
     target_agent = policy_agent.copy()
     target_agent.eval()
 
-    optimizer = torch.optim.RMSprop(policy_agent.parameters())
-    buffer = ExperienceBuffer(buffer_size)
+    optimizer = torch.optim.Adam(policy_agent.parameters(), lr=lr)
+    buffer = ReplayMemory(buffer_size)
     teacher = MrAdamsTheTeacher(target_agent, policy_agent, discount,
                                 optimizer, device, buffer, replay_per_step)
 
@@ -107,7 +108,10 @@ if __name__ == "__main__":
     plt.show()
     plot(total_reward, ma_records)
     env.reset()
-    proc_image = make_state_image(env, transforms)
+    last_image = make_state_image(env, transforms)
+    new_image = make_state_image(env, transforms)
+    state = new_image - last_image
+
     loop_start = datetime.now()
     for t in range(total_steps):
         inner_step += 1
@@ -115,15 +119,22 @@ if __name__ == "__main__":
         if display_game:
             env.render("human")
 
-        action = policy_agent.make_up_my_mind(proc_image.unsqueeze(0))
+        action = policy_agent.make_up_my_mind(state)
 
-        _, reward, done, info = env.step(action)
+        _, reward, done, info = env.step(action.item())
+        reward_tensor = torch.tensor([reward], device=device)
         accumulated_reward += reward
-        new_proc_image = make_state_image(env, transforms)
+        
+        last_image = new_image
+        new_image = make_state_image(env, transforms)
+        if not done:
+            next_state = new_image - last_image
+        else:
+            next_state = None
+        
 
-        buffer.append(Experience(
-            proc_image, new_proc_image, reward, action, done))
-        proc_image = new_proc_image
+        buffer.push(state, action, next_state, reward_tensor)
+        state = next_state
 
         loss = teacher.teach_multiple()
         if loss:
@@ -154,6 +165,10 @@ if __name__ == "__main__":
             inner_step = 0
             e_greedy_parameters.step()
             episode_loss.clear()
+            
+            last_image = make_state_image(env, transforms)
+            new_image = make_state_image(env, transforms)
+            state = new_image - last_image
 
     env.close()
     loop_end = datetime.now()

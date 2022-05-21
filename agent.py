@@ -5,19 +5,19 @@ import numpy as np
 import typing
 from dataclasses import dataclass
 from torchvision.transforms import transforms
+import random
 
 Action = typing.Any
-
 
 
 class EpsilonGreedyParameters:
 
     # Probability of selecting randomly
-    e_start :  float
-    e_end : float
-    e_decrease_episode : int
+    e_start:  float
+    e_end: float
+    e_decrease_episode: int
 
-    def __init__(self, e_start: float, e_end: float, episodes : int) -> None:
+    def __init__(self, e_start: float, e_end: float, episodes: int) -> None:
         self.e_start = e_start
         self.e_end = e_end
         self.episodes = episodes
@@ -29,6 +29,7 @@ class EpsilonGreedyParameters:
         if self.e < self.e_end:
             self.e = self.e_end
 
+
 class MyLovelyAgent(torch.nn.Module):
     """
     This agent acts on CartPole with image as input
@@ -39,7 +40,7 @@ class MyLovelyAgent(torch.nn.Module):
 
     def __init__(
         self,
-        image_size: typing.Union[int, tuple[int,int]],
+        image_size: typing.Union[int, tuple[int, int]],
         action_set: set[Action],
         e_greedy_parameters: EpsilonGreedyParameters,
         device: torch.device
@@ -70,8 +71,8 @@ class MyLovelyAgent(torch.nn.Module):
 
         # Number of Linear input connections depends on output of conv2d layers
         # and therefore the input image size, so compute it.
-        def conv2d_size_out(size, kernel_size = 5, stride = 2):
-            return (size - (kernel_size - 1) - 1) // stride  + 1
+        def conv2d_size_out(size, kernel_size=5, stride=2):
+            return (size - (kernel_size - 1) - 1) // stride + 1
         convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(input_width)))
         convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(input_height)))
         linear_input_size = convw * convh * 32
@@ -97,21 +98,20 @@ class MyLovelyAgent(torch.nn.Module):
         TODO: Make this general across multiple policies
         """
         # we'll be acting on the real world, so its a test! Put it in test mode
-        self.eval()
 
-        if np.random.uniform() > self.e_greedy_parameters.e:  # Select Max
+        non_random = np.random.uniform() > self.e_greedy_parameters.e
+        if non_random:  # Select Max
             with torch.no_grad():
                 action_index = self(image).max(1)[1].view(1, 1)
         else:  # Select Randomly
-            action_index = torch.randint(0, len(self.action_set), (1,))
+            action_index = torch.tensor(
+                [[random.randrange(len(self.action_set))]], device=self.device, dtype=torch.long)
 
-        self.train()
-
-        return action_index.item()
+        return action_index.to(self.device)
 
     def copy(self) -> "MyLovelyAgent":
         new_agent = MyLovelyAgent(self.input_shape, self.action_set,
                                   self.e_greedy_parameters, self.device)
         new_agent.load_state_dict(self.state_dict())
-        
+
         return new_agent
